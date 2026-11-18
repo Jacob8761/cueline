@@ -1281,8 +1281,8 @@ select {
     var t = { n: n, blob: blob, url: URL.createObjectURL(blob), dur: dur, name: name, saved: false, where: '' };
     cam.takes.push(t);
     renderTakes(); camUI();
-    if (dir.ok) {
-      writeTake(t).then(function () { toast('Take ' + n + ' saved to ' + dir.handle.name); })
+    if (folder.ok) {
+      writeTake(t).then(function () { toast('Take ' + n + ' saved to ' + folder.handle.name); })
         .catch(function () { toast('Take ' + n + ' recorded. Press S to save it'); });
     } else {
       toast('Take ' + n + ' recorded. Press S to save it');
@@ -1290,7 +1290,7 @@ select {
   }
 
   /* ---------- Saving takes ---------- */
-  var dir = { handle: null, ok: false };
+  var folder = { handle: null, ok: false };
   var hasFS = typeof window.showDirectoryPicker === 'function';
 
   function idb(fn) {
@@ -1310,15 +1310,15 @@ select {
   }
 
   function writeTake(t) {
-    return dir.handle.getFileHandle(t.name, { create: true }).then(function (fh) {
+    return folder.handle.getFileHandle(t.name, { create: true }).then(function (fh) {
       return fh.createWritable();
     }).then(function (w) {
       return w.write(t.blob).then(function () { return w.close(); });
     }).then(function () {
-      t.saved = true; t.where = 'Saved in the “' + dir.handle.name + '” folder';
+      t.saved = true; t.where = 'Saved in the “' + folder.handle.name + '” folder';
       renderTakes(); camUI();
     }).catch(function (e) {
-      dir.ok = false; saveUI();
+      folder.ok = false; saveUI();
       throw e;
     });
   }
@@ -1332,7 +1332,7 @@ select {
   }
 
   function saveTake(t) {
-    if (dir.ok) return writeTake(t).catch(function () { downloadTake(t); });
+    if (folder.ok) return writeTake(t).catch(function () { downloadTake(t); });
     downloadTake(t);
   }
 
@@ -1344,19 +1344,19 @@ select {
     var t = lastUnsaved();
     if (!t) { toast(cam.takes.length ? 'All takes are saved' : 'No takes yet. Press Enter to record'); return; }
     saveTake(t);
-    if (!dir.ok) toast('Take ' + t.n + ' saved to Downloads');
+    if (!folder.ok) toast('Take ' + t.n + ' saved to Downloads');
   }
 
   function saveUI() {
     var where = $('save-where');
     where.textContent = '';
-    if (dir.handle && dir.ok) {
+    if (folder.handle && folder.ok) {
       where.append('Each take saves automatically to the ');
-      var b = document.createElement('b'); b.textContent = dir.handle.name; where.append(b);
+      var b = document.createElement('b'); b.textContent = folder.handle.name; where.append(b);
       where.append(' folder as soon as you stop recording.');
-    } else if (dir.handle) {
+    } else if (folder.handle) {
       where.append('Chrome needs your OK again to save into ');
-      var b2 = document.createElement('b'); b2.textContent = dir.handle.name; where.append(b2);
+      var b2 = document.createElement('b'); b2.textContent = folder.handle.name; where.append(b2);
       where.append('. Until then, takes go to Downloads when you click Save.');
     } else {
       where.append('Your ');
@@ -1364,29 +1364,29 @@ select {
       where.append(' folder, when you click Save on a take or press S while prompting.' + (hasFS ? ' Choose a folder to save every take automatically.' : ''));
     }
     $('pick-folder').hidden = !hasFS;
-    $('pick-folder').textContent = dir.handle && !dir.ok ? 'Allow saving to ' + dir.handle.name : dir.handle ? 'Change folder' : 'Choose a folder';
-    $('forget-folder').hidden = !dir.handle;
+    $('pick-folder').textContent = folder.handle && !folder.ok ? 'Allow saving to ' + folder.handle.name : folder.handle ? 'Change folder' : 'Choose a folder';
+    $('forget-folder').hidden = !folder.handle;
   }
 
   function saveBacklog() {
-    cam.takes.forEach(function (t) { if (t.url && !t.saved && dir.ok) writeTake(t).catch(function () {}); });
+    cam.takes.forEach(function (t) { if (t.url && !t.saved && folder.ok) writeTake(t).catch(function () {}); });
   }
 
   $('pick-folder').addEventListener('click', function () {
-    if (dir.handle && !dir.ok && dir.handle.requestPermission) {
-      dir.handle.requestPermission({ mode: 'readwrite' }).then(function (p) {
-        dir.ok = p === 'granted'; saveUI(); saveBacklog();
+    if (folder.handle && !folder.ok && folder.handle.requestPermission) {
+      folder.handle.requestPermission({ mode: 'readwrite' }).then(function (p) {
+        folder.ok = p === 'granted'; saveUI(); saveBacklog();
       }).catch(function () {});
       return;
     }
     window.showDirectoryPicker({ id: 'cueline-takes', mode: 'readwrite', startIn: 'videos' }).then(function (h) {
-      dir.handle = h; dir.ok = true;
+      folder.handle = h; folder.ok = true;
       idb(function (st) { return st.put(h, 'dir'); }).catch(function () {});
       saveUI(); saveBacklog();
     }).catch(function () {});
   });
   $('forget-folder').addEventListener('click', function () {
-    dir.handle = null; dir.ok = false;
+    folder.handle = null; folder.ok = false;
     idb(function (st) { return st.delete('dir'); }).catch(function () {});
     saveUI();
   });
@@ -1394,8 +1394,8 @@ select {
   if (hasFS) {
     idb(function (st) { return st.get('dir'); }).then(function (h) {
       if (!h) return;
-      dir.handle = h;
-      return (h.queryPermission ? h.queryPermission({ mode: 'readwrite' }) : Promise.resolve('prompt')).then(function (p) { dir.ok = p === 'granted'; });
+      folder.handle = h;
+      return (h.queryPermission ? h.queryPermission({ mode: 'readwrite' }) : Promise.resolve('prompt')).then(function (p) { folder.ok = p === 'granted'; });
     }).catch(function () {}).then(saveUI);
   }
   saveUI();
@@ -1414,7 +1414,7 @@ select {
       var watch = document.createElement('button'); watch.type = 'button'; watch.className = 'btn'; watch.textContent = 'Watch';
       watch.addEventListener('click', function () { var p = $('player'); p.hidden = false; p.src = t.url; p.play().catch(function () {}); });
       var save = document.createElement('button'); save.type = 'button'; save.className = 'btn';
-      save.textContent = t.saved ? 'Save again' : dir.ok ? 'Save to folder' : 'Save';
+      save.textContent = t.saved ? 'Save again' : folder.ok ? 'Save to folder' : 'Save';
       save.addEventListener('click', function () { saveTake(t); });
       var where = document.createElement('span'); where.className = 'where';
       where.textContent = t.saved ? t.where : 'Not saved yet';
