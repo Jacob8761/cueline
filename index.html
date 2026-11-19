@@ -572,14 +572,19 @@ select {
         <div class="meter" id="meter-wrap" hidden><i id="meter"></i></div>
         <button class="btn wide" id="cam-toggle" type="button">Turn on camera</button>
         <p class="cam-status" id="cam-status">Record yourself while you read. Takes stay on this computer until you save them.</p>
-        <div class="cam-fields" id="cam-fields" hidden>
           <div class="field">
-            <label class="field-head" for="cam-select">Camera</label>
-            <select id="cam-select"></select>
+            <label class="field-head" for="frame">Framing</label>
+            <select id="frame">
+              <option value="wide">Widest view (whole camera, nothing cropped)</option>
+              <option value="landscape">16:9 landscape (YouTube)</option>
+              <option value="vertical">9:16 vertical (Shorts)</option>
+            </select>
+            <span style="font-size:12px;color:var(--muted)">Widest view fits the phone either way up: tall when upright, wide when sideways.</span>
           </div>
-          <div class="field">
-            <label class="field-head" for="mic-select">Microphone</label>
-            <select id="mic-select"></select>
+          <div class="field" id="zoom-field" hidden>
+            <div class="field-head"><label for="zoom">Zoom</label><output id="o-zoom"></output></div>
+            <input type="range" id="zoom">
+            <button class="btn" id="zoom-wide" type="button">Zoom all the way out</button>
           </div>
           <div class="field">
             <label class="field-head" for="res">Quality</label>
@@ -589,18 +594,14 @@ select {
               <option value="2160">4K, if the camera supports it</option>
             </select>
           </div>
+        <div class="cam-fields" id="cam-fields" hidden>
           <div class="field">
-            <label class="field-head" for="frame">Framing</label>
-            <select id="frame">
-              <option value="wide">Widest view (full camera, 4:3)</option>
-              <option value="landscape">16:9 landscape (YouTube)</option>
-              <option value="vertical">9:16 vertical (Shorts)</option>
-            </select>
+            <label class="field-head" for="cam-select">Camera</label>
+            <select id="cam-select"></select>
           </div>
-          <div class="field" id="zoom-field" hidden>
-            <div class="field-head"><label for="zoom">Zoom</label><output id="o-zoom"></output></div>
-            <input type="range" id="zoom">
-            <button class="btn" id="zoom-wide" type="button">Zoom all the way out</button>
+          <div class="field">
+            <label class="field-head" for="mic-select">Microphone</label>
+            <select id="mic-select"></select>
           </div>
           <label class="check"><input type="checkbox" id="autoRec"><span>Record when the countdown ends<small>Restart begins a new take. Recording stops 2 seconds after the script ends.</small></span></label>
           <div class="field">
@@ -717,6 +718,7 @@ select {
       <button class="btn play" id="h-play" type="button">Play</button>
       <button class="btn rec" id="h-rec" type="button" hidden>● Record</button>
       <button class="btn" id="h-pip" type="button" hidden>Preview</button>
+      <button class="btn" id="h-frame" type="button" hidden>Framing</button>
       <button class="btn" id="h-flipcam" type="button" hidden>Flip camera</button>
       <button class="btn save" id="h-save" type="button" hidden>Save take</button>
     </div>
@@ -1141,7 +1143,14 @@ select {
   function getStream(useIds) {
     var h = +s.res;
     var video = { frameRate: { ideal: 30 } };
-    if (s.frame === 'wide') { video.width = { ideal: Math.round(h * 4 / 3) }; video.height = { ideal: h }; video.aspectRatio = { ideal: 4 / 3 }; }
+    if (s.frame === 'wide') {
+      /* Ask for a square-ish ideal so the browser picks the camera's full 4:3 sensor mode (the widest
+         field of view) rather than a cropped 16:9 one, then lean it tall or wide to match the phone. */
+      var L = Math.round(h * 4 / 3);
+      var upright = window.innerHeight > window.innerWidth;
+      video.width = { ideal: L }; video.height = { ideal: L };
+      video.aspectRatio = { ideal: upright ? 3 / 4 : 4 / 3 };
+    }
     else if (s.frame === 'vertical') { video.width = { ideal: h }; video.height = { ideal: Math.round(h * 16 / 9) }; video.aspectRatio = { ideal: 9 / 16 }; }
     else { video.width = { ideal: Math.round(h * 16 / 9) }; video.height = { ideal: h }; video.aspectRatio = { ideal: 16 / 9 }; }
     if (useIds && s.cam) video.deviceId = { exact: s.cam };
@@ -1514,6 +1523,8 @@ select {
     P.classList.toggle('recording', recording);
     $('cam-select').disabled = $('mic-select').disabled = $('res').disabled = $('frame').disabled = recording;
     $('h-flipcam').hidden = !on || !(cam.videoInputs > 1);
+    $('h-frame').hidden = !on;
+    $('h-frame').textContent = 'Framing: ' + ({ wide: 'Widest', landscape: '16:9', vertical: '9:16' })[s.frame];
   }
 
   /* Zoom: where the camera reports a zoom range (Safari on iPhone, Chrome on Android), start at the
@@ -1563,6 +1574,27 @@ select {
   }
   $('h-flipcam').addEventListener('click', flipCamera);
   $('frame').addEventListener('change', function (e) { s.frame = e.target.value; saveSettings(); if (cam.stream) startCamera(); });
+  /* Turning the phone with Widest view on: reopen the camera so the picture leans the new way up. */
+  var lastUpright = window.innerHeight > window.innerWidth;
+  function reorientCamera() {
+    var upright = window.innerHeight > window.innerWidth;
+    if (upright === lastUpright) return;
+    lastUpright = upright;
+    if (isPhone && cam.stream && !cam.rec && s.frame === 'wide') startCamera();
+  }
+  window.addEventListener('orientationchange', function () { setTimeout(reorientCamera, 300); });
+  window.addEventListener('resize', function () { setTimeout(reorientCamera, 300); });
+
+  var FRAME_ORDER = ['wide', 'landscape', 'vertical'];
+  var FRAME_NAMES = { wide: 'Widest', landscape: '16:9', vertical: '9:16' };
+  $('h-frame').addEventListener('click', function () {
+    if (cam.rec) { toast('Stop recording before changing framing'); return; }
+    s.frame = FRAME_ORDER[(FRAME_ORDER.indexOf(s.frame) + 1) % FRAME_ORDER.length];
+    saveSettings(); $('frame').value = s.frame;
+    toast('Framing: ' + FRAME_NAMES[s.frame]);
+    if (cam.stream) startCamera();
+    camUI();
+  });
   $('frame').value = s.frame;
 
   $('cam-toggle').addEventListener('click', function () { cam.stream ? stopCamera() : startCamera(); });
