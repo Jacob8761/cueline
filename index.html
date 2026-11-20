@@ -338,57 +338,141 @@ input[type="range"] { width: 100%; accent-color: var(--amber); margin: 0; }
   transition: opacity .3s;
 }
 
+/* Control bar: one floating pill with the controls used mid-take; everything else lives in the More panel. */
 .hud {
   position: absolute;
   left: 0; right: 0; bottom: 0;
   z-index: 4;
-  padding: 28px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
-  background: linear-gradient(to top, rgba(12,14,17,.96) 55%, rgba(12,14,17,0));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 max(12px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+  transition: opacity .3s, transform .3s;
+}
+.hud > * { pointer-events: auto; }
+.prompter.idle .hud:not(.panel-open) { opacity: 0; transform: translateY(10px); }
+.prompter.idle .hud:not(.panel-open) > * { pointer-events: none; }
+.bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px 18px;
-  flex-wrap: wrap;
-  transition: opacity .35s, transform .35s;
-}
-.prompter.idle .hud { opacity: 0; transform: translateY(12px); pointer-events: none; }
-.hud-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.hud .btn { padding: 8px 12px; font-size: 14px; background: rgba(27,31,38,.9); }
-.hud .btn.on { color: var(--amber); border-color: rgba(242,182,75,.5); }
-.hud .play {
-  min-width: 92px;
-  background: var(--amber);
-  color: #1a1204;
-  border-color: var(--amber);
-  font-family: var(--f-display);
-  font-weight: 700;
-}
-.stepper {
-  display: flex; align-items: center;
+  gap: 2px;
+  padding: 5px;
+  max-width: 100%;
+  background: rgba(20, 23, 28, .86);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(27,31,38,.9);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
 }
-.stepper button { border: 0; background: none; padding: 7px 11px; cursor: pointer; font-size: 16px; line-height: 1; }
-.stepper button:hover { color: var(--amber); }
-.stepper span {
+.ib {
+  position: relative;
+  flex: none;
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 0; border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
   font-family: var(--f-mono);
   font-size: 13px;
-  min-width: 70px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
 }
-.status {
-  display: flex; align-items: center; gap: 14px;
-  font-family: var(--f-mono);
+.ib:hover { background: rgba(255, 255, 255, .08); }
+.ib svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ib.primary { width: 46px; height: 46px; background: var(--amber); color: #1a1204; }
+.ib.primary:hover { background: var(--amber); filter: brightness(1.08); }
+.ib.primary svg { fill: currentColor; stroke: none; }
+.ib.primary .i-pause, .ib.primary.is-playing .i-play { display: none; }
+.ib.primary.is-playing .i-pause { display: block; }
+.ib .rec-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--tally); transition: border-radius .15s, width .15s, height .15s; }
+.ib.is-rec .rec-dot { width: 13px; height: 13px; border-radius: 3px; }
+.ib.save-btn { color: #5fd18b; }
+.ib .badge {
+  position: absolute; top: 1px; right: 0;
+  min-width: 16px; height: 16px; padding: 0 3px;
+  display: grid; place-items: center;
+  border-radius: 999px;
+  background: #5fd18b; color: #06210f;
+  font: 500 10px/1 var(--f-mono);
+}
+.ib.on { color: var(--amber); }
+.sep { flex: none; width: 1px; height: 22px; margin: 0 3px; background: var(--line); }
+.speed { display: flex; align-items: center; }
+.speed .ib { width: 30px; height: 34px; font-size: 18px; }
+.speed .val { min-width: 42px; text-align: center; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.speed .val b { display: block; font: 500 14px var(--f-mono); }
+.speed .val small { display: block; font: 9px var(--f-mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.left-time { padding: 0 8px 0 6px; font: 12px var(--f-mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.left-time i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--muted); vertical-align: 1px; }
+.prompter.live .left-time i { background: var(--tally); box-shadow: 0 0 8px var(--tally); }
+
+.panel {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  width: min(380px, 100%);
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+  padding: 14px;
+  background: rgba(20, 23, 28, .94);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+}
+.hud.panel-open .panel { display: flex; }
+.panel .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.panel .row > span { font-size: 13px; color: var(--muted); }
+.panel .status { font: 12px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.panel .status b { color: var(--text); font-weight: 500; }
+.panel .speed { border: 1px solid var(--line); border-radius: 999px; background: var(--raise); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--raise);
   font-size: 13px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
+  cursor: pointer;
 }
-.status .state { display: flex; align-items: center; gap: 7px; color: var(--text); letter-spacing: .08em; }
-.status .state i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
-.prompter.live .status .state i { background: var(--tally); box-shadow: 0 0 10px var(--tally); }
-.status b { color: var(--text); font-weight: 500; }
+.chip:hover { border-color: #3a414d; }
+.chip.on { color: var(--amber); border-color: rgba(242, 182, 75, .5); }
+.panel .back { align-self: flex-start; }
+
+/* Minimized: every control disappears except one faint button to bring them back. */
+.prompter.min .hud { display: none; }
+#h-restore {
+  position: absolute;
+  z-index: 4;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  width: 34px; height: 34px;
+  display: none; place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(20, 23, 28, .6);
+  color: var(--text);
+  opacity: .35;
+  cursor: pointer;
+}
+#h-restore svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#h-restore:hover, #h-restore:focus-visible { opacity: 1; }
+.prompter.min #h-restore { display: grid; }
+.prompter.side-right #h-restore { right: auto; left: max(12px, env(safe-area-inset-left, 0px)); }
+
+@media (max-width: 440px) {
+  .ib { width: 36px; height: 36px; }
+  .ib.primary { width: 42px; height: 42px; }
+  .speed .ib { width: 26px; }
+  .speed .val { min-width: 36px; }
+  .left-time { display: none; }
+  .sep { margin: 0 1px; }
+}
 
 /* ---------- Camera ---------- */
 .cam-view {
@@ -418,7 +502,7 @@ input[type="range"] { width: 100%; accent-color: var(--amber); margin: 0; }
 .meter i { display: block; height: 100%; width: 0; background: #5fd18b; transition: width .08s linear; }
 .meter i.hot { background: var(--tally); }
 .btn.wide { width: 100%; padding: 9px 12px; font-size: 14px; }
-.btn.rec, .hud .btn.rec { color: var(--tally); border-color: rgba(255, 90, 79, .55); }
+.btn.rec { color: var(--tally); border-color: rgba(255, 90, 79, .55); }
 .cam-status { margin: 0; font-size: 13px; color: var(--muted); }
 .cam-status.err { color: #ff8f86; }
 select {
@@ -457,7 +541,6 @@ select {
 .save-box .where-now { font-size: 13px; overflow-wrap: anywhere; }
 .save-box .where-now b { color: var(--amber); font-weight: 400; }
 .save-box .save-acts { display: flex; gap: 6px; flex-wrap: wrap; }
-.hud .btn.save { color: #5fd18b; border-color: rgba(95, 209, 139, .5); }
 #player { width: 100%; max-width: 100%; border-radius: 6px; background: #000; }
 .takes-note { margin: 0; font-size: 12px; color: var(--muted); }
 
@@ -690,6 +773,7 @@ select {
           <kbd>R</kbd><span>Restart from the top</span>
           <kbd>Enter</kbd><span>Start or stop recording</span>
           <kbd>S</kbd><span>Save the last take</span>
+          <kbd>H</kbd><span>Hide or show all the controls</span>
           <kbd>P</kbd><span>Self view: small, large, behind text, hidden</span>
           <kbd>M</kbd><span>Mirror on or off</span>
           <kbd>F</kbd><span>Fullscreen</span>
@@ -712,42 +796,42 @@ select {
   <div id="pip" hidden title="Drag to move"><video id="pip-video" muted playsinline autoplay></video><span class="pip-tag">drag to move</span></div>
   <div id="rec" hidden><i></i>REC <span id="rec-time">0:00</span></div>
   <div class="hud" id="hud">
-    <div class="hud-group">
-      <button class="btn" id="h-back" type="button">← Editor</button>
-      <button class="btn" id="h-restart" type="button">Restart</button>
-      <button class="btn play" id="h-play" type="button">Play</button>
-      <button class="btn rec" id="h-rec" type="button" hidden>● Record</button>
-      <button class="btn" id="h-pip" type="button" hidden>Preview</button>
-      <button class="btn" id="h-frame" type="button" hidden>Framing</button>
-      <button class="btn" id="h-flipcam" type="button" hidden>Flip camera</button>
-      <button class="btn save" id="h-save" type="button" hidden>Save take</button>
+    <div class="panel" id="panel" role="dialog" aria-label="More controls">
+      <div class="row"><span>Status</span><span class="status"><b id="h-state">PAUSED</b> · <b id="h-elapsed">0:00</b> in · <b id="h-left">0:00</b> left</span></div>
+      <div class="row"><span>Text size</span>
+        <div class="speed"><button class="ib" type="button" id="h-smaller" aria-label="Smaller text">−</button><span class="val"><b id="h-size">64</b><small>px</small></span><button class="ib" type="button" id="h-bigger" aria-label="Bigger text">+</button></div>
+      </div>
+      <div class="row"><span>Move text</span>
+        <div class="speed"><button class="ib" type="button" id="h-up" aria-label="Move text back" title="Hold to keep moving">▲</button><span class="val"><small>line</small></span><button class="ib" type="button" id="h-down" aria-label="Move text ahead" title="Hold to keep moving">▼</button></div>
+      </div>
+      <div class="chips">
+        <button class="chip" id="h-pip" type="button" hidden>Self view</button>
+        <button class="chip" id="h-frame" type="button" hidden>Framing</button>
+        <button class="chip" id="h-flipcam" type="button" hidden>Flip camera</button>
+        <button class="chip" id="h-hug" type="button" hidden>Text by camera</button>
+        <button class="chip" id="h-mirror" type="button">Mirror</button>
+        <button class="chip" id="h-full" type="button">Fullscreen</button>
+      </div>
+      <button class="chip back" id="h-back" type="button">← Back to editor</button>
     </div>
-    <div class="hud-group">
-      <div class="stepper" aria-label="Move text">
-        <button type="button" id="h-up" aria-label="Move text back" title="Back (↑). Hold to keep moving.">▲</button>
-        <span>Move</span>
-        <button type="button" id="h-down" aria-label="Move text ahead" title="Ahead (↓). Hold to keep moving.">▼</button>
+    <div class="bar" role="toolbar" aria-label="Prompter controls">
+      <span class="left-time" title="Time left"><i></i><span id="h-left-bar">0:00</span></span>
+      <button class="ib" id="h-restart" type="button" aria-label="Restart" title="Restart (R)"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+      <button class="ib primary" id="h-play" type="button" aria-label="Play" title="Play or pause (Space)"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg></button>
+      <button class="ib" id="h-rec" type="button" aria-label="Record" title="Record (Enter)" hidden><span class="rec-dot"></span></button>
+      <button class="ib save-btn" id="h-save" type="button" aria-label="Save take" title="Save take (S)" hidden><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg><span class="badge" id="h-save-n">1</span></button>
+      <span class="sep"></span>
+      <div class="speed" aria-label="Speed">
+        <button class="ib" type="button" id="h-slower" aria-label="Slower" title="Slower (←)">−</button>
+        <span class="val"><b id="h-wpm">140</b><small>wpm</small></span>
+        <button class="ib" type="button" id="h-faster" aria-label="Faster" title="Faster (→)">+</button>
       </div>
-      <div class="stepper" aria-label="Speed">
-        <button type="button" id="h-slower" aria-label="Slower">−</button>
-        <span id="h-wpm">140 wpm</span>
-        <button type="button" id="h-faster" aria-label="Faster">+</button>
-      </div>
-      <div class="stepper" aria-label="Text size">
-        <button type="button" id="h-smaller" aria-label="Smaller text">A−</button>
-        <span id="h-size">64 px</span>
-        <button type="button" id="h-bigger" aria-label="Bigger text">A+</button>
-      </div>
-      <button class="btn" id="h-hug" type="button" hidden>Text by camera</button>
-      <button class="btn" id="h-mirror" type="button">Mirror</button>
-      <button class="btn" id="h-full" type="button">Fullscreen</button>
-    </div>
-    <div class="status">
-      <span class="state"><i></i><span id="h-state">PAUSED</span></span>
-      <span>elapsed <b id="h-elapsed">0:00</b></span>
-      <span>left <b id="h-left">0:00</b></span>
+      <span class="sep"></span>
+      <button class="ib" id="h-more" type="button" aria-label="More controls" aria-expanded="false" title="More"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+      <button class="ib" id="h-min" type="button" aria-label="Hide controls" title="Hide controls (H)"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
     </div>
   </div>
+  <button id="h-restore" type="button" aria-label="Show controls" title="Show controls (H)"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
 </section>
 
 <script>
@@ -895,8 +979,8 @@ select {
     flip.style.transform = 'scale(' + (s.mirrorX ? -1 : 1) + ',' + (s.mirrorY ? -1 : 1) + ')';
     P.classList.toggle('no-guide', !s.showGuide);
     $('h-mirror').classList.toggle('on', s.mirrorX);
-    $('h-wpm').textContent = s.wpm + ' wpm';
-    $('h-size').textContent = s.size + ' px';
+    $('h-wpm').textContent = s.wpm;
+    $('h-size').textContent = s.size;
     textH = textEl.offsetHeight;
     pos = ratio * textH;
     apply();
@@ -908,7 +992,7 @@ select {
     scroller.style.transform = 'translate3d(0,' + (-pos) + 'px,0)';
     $('progress-bar').style.width = (textH ? pos / textH * 100 : 0) + '%';
     var v = pxPerSec();
-    $('h-left').textContent = fmt(v ? (textH - pos) / v : 0);
+    $('h-left').textContent = $('h-left-bar').textContent = fmt(v ? (textH - pos) / v : 0);
     $('h-elapsed').textContent = fmt(elapsed);
   }
 
@@ -931,7 +1015,8 @@ select {
   function setState() {
     P.classList.toggle('live', playing);
     $('h-state').textContent = counting ? 'STANDBY' : playing ? 'ROLLING' : 'PAUSED';
-    $('h-play').textContent = playing ? 'Pause' : 'Play';
+    $('h-play').classList.toggle('is-playing', playing);
+    $('h-play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
   }
   function play() {
     if (playing || counting) return;
@@ -977,7 +1062,7 @@ select {
   function wake() {
     P.classList.remove('idle');
     clearTimeout(idleT);
-    if (playing) idleT = setTimeout(function () { P.classList.add('idle'); }, 2500);
+    if (playing) idleT = setTimeout(function () { if (!$('hud').classList.contains('panel-open')) P.classList.add('idle'); }, 2500);
   }
 
   function changeSpeed(d) {
@@ -994,6 +1079,7 @@ select {
     textEl.innerHTML = renderScript(scriptEl.value || '[No script yet] Go back to the editor and paste your script.');
     words = countWords(scriptEl.value);
     P.hidden = false; open = true;
+    P.classList.toggle('min', !!s.hudMin);
     pos = 0; elapsed = 0; textH = 0;
     layout();
     wake();
@@ -1030,6 +1116,25 @@ select {
   $('h-mirror').addEventListener('click', function () { s.mirrorX = !s.mirrorX; saveSettings(); layout(); });
   $('h-hug').addEventListener('click', function () { s.hugCam = !s.hugCam; saveSettings(); layout(); toast(s.hugCam ? 'Text next to the camera' : 'Text centered'); });
   $('h-full').addEventListener('click', fullscreen);
+
+  /* More panel and minimize. Hidden controls stay hidden for the next take until you bring them back. */
+  function setPanel(isOpen) {
+    $('hud').classList.toggle('panel-open', isOpen);
+    $('h-more').setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    $('h-more').classList.toggle('on', isOpen);
+    wake();
+  }
+  function setMin(min) {
+    s.hudMin = min; saveSettings();
+    if (min) setPanel(false);
+    P.classList.toggle('min', min);
+    try { (min ? $('h-restore') : $('h-min')).focus({ preventScroll: true }); } catch (e) {}
+  }
+  $('h-more').addEventListener('click', function () { setPanel(!$('hud').classList.contains('panel-open')); });
+  $('h-min').addEventListener('click', function () { setMin(true); });
+  $('h-restore').addEventListener('click', function () { setMin(false); });
+  $('h-restore').addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+
   $('hud').addEventListener('pointerdown', function (e) { e.stopPropagation(); });
 
   /* Hold-to-move buttons: one tap moves a line; holding keeps the text moving. */
@@ -1066,6 +1171,8 @@ select {
 
   var drag = null;
   flip.addEventListener('pointerdown', function (e) {
+    /* Tapping the script while the panel is open just closes the panel; it doesn't also play or pause. */
+    if ($('hud').classList.contains('panel-open')) { setPanel(false); drag = null; return; }
     drag = { y: e.clientY, moved: false };
     try { flip.setPointerCapture(e.pointerId); } catch (err) {}
   });
@@ -1107,6 +1214,7 @@ select {
       case 'm': case 'M': s.mirrorX = !s.mirrorX; saveSettings(); layout(); break;
       case 'f': case 'F': fullscreen(); break;
       case 'Enter': toggleRec(); break;
+      case 'h': case 'H': setMin(!s.hudMin); break;
       case 's': case 'S': saveLastTake(); break;
       case 'p': case 'P': togglePip(); break;
       case 'Escape': if (!document.fullscreenElement) closePrompter(); else handled = false; break;
@@ -1509,7 +1617,8 @@ select {
     $('cam-toggle').textContent = on ? 'Turn off camera' : 'Turn on camera';
     $('h-rec').hidden = !on;
     $('h-pip').hidden = !on && (!canCapture || camBlocked());
-    $('h-rec').textContent = recording ? '■ Stop recording' : '● Record';
+    $('h-rec').classList.toggle('is-rec', recording);
+    $('h-rec').setAttribute('aria-label', recording ? 'Stop recording' : 'Record');
     $('h-pip').textContent = on ? 'Self view: ' + PIP_NAMES[s.pipMode] : 'Show me';
     $('h-pip').classList.toggle('on', on && s.pipMode !== 'off');
     pipEl.hidden = !(on && s.pipMode !== 'off');
@@ -1519,7 +1628,7 @@ select {
     $('rec').hidden = !recording;
     var pending = lastUnsaved();
     $('h-save').hidden = !pending || recording;
-    if (pending) $('h-save').textContent = '↓ Save take ' + pending.n;
+    if (pending) { $('h-save-n').textContent = pending.n; $('h-save').setAttribute('aria-label', 'Save take ' + pending.n); }
     P.classList.toggle('recording', recording);
     $('cam-select').disabled = $('mic-select').disabled = $('res').disabled = $('frame').disabled = recording;
     $('h-flipcam').hidden = !on || !(cam.videoInputs > 1);
