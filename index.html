@@ -686,7 +686,7 @@ select {
             <label class="field-head" for="mic-select">Microphone</label>
             <select id="mic-select"></select>
           </div>
-          <label class="check"><input type="checkbox" id="autoRec"><span>Record when the countdown ends<small>Restart begins a new take. Recording stops 2 seconds after the script ends.</small></span></label>
+          <label class="check"><input type="checkbox" id="autoRec"><span>Record when I press Play from the top<small>Recording starts when the countdown ends. Restart ends the take. Recording stops 2 seconds after the script ends.</small></span></label>
           <div class="field">
             <label class="field-head" for="pipMode">See yourself while prompting</label>
             <select id="pipMode">
@@ -765,7 +765,7 @@ select {
       <div class="group">
         <span class="label">While prompting</span>
         <div class="keys">
-          <kbd>Space</kbd><span>Play or pause (or tap the screen)</span>
+          <kbd>Space</kbd><span>Play or pause. Nothing else starts the words moving.</span>
           <kbd>↑ ↓</kbd><span>Move the text back or ahead (hold to keep going)</span>
           <kbd>← →</kbd><span>Slower or faster by 10 wpm</span>
           <kbd>PgUp PgDn</kbd><span>Jump half a screen (clickers)</span>
@@ -866,14 +866,27 @@ select {
 
   /* ---------- Script parsing ---------- */
   function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-  function countWords(t) { return (t.replace(/\[[^\]]*\]/g, ' ').match(/[A-Za-z0-9À-ɏ'’-]+/g) || []).length; }
+  /* A spoken word: letters or digits, allowing inner apostrophes and hyphens (don't, Section-8).
+     Stage directions in [brackets] are never counted. The editor's runtime and the prompter's
+     timing both use this, so they always agree. */
+  var WORD = /[A-Za-z0-9À-ɏ]+(?:['’-][A-Za-z0-9À-ɏ]+)*/g;
+  function countWords(t) { return (t.replace(/\[[^\]]*\]/g, ' ').match(WORD) || []).length; }
   function countCues(t) { return (t.match(/\[[^\]]+\]/g) || []).length; }
+  function wrapWords(t) {
+    return t.split(/(\[[^\]]*\])/).map(function (part) {
+      if (/^\[[^\]]*\]$/.test(part)) return '<span class="cue">' + esc(part.slice(1, -1)) + '</span>';
+      var out = '', last = 0, m;
+      WORD.lastIndex = 0;
+      while ((m = WORD.exec(part))) {
+        out += esc(part.slice(last, m.index)) + '<span class="w">' + esc(m[0]) + '</span>';
+        last = m.index + m[0].length;
+      }
+      return out + esc(part.slice(last));
+    }).join('').replace(/\n/g, '<br>');
+  }
   function renderScript(t) {
     var paras = t.replace(/\r/g, '').split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
-    var html = paras.map(function (p) {
-      return '<p>' + esc(p).replace(/\n/g, '<br>').replace(/\[([^\]]+)\]/g, '<span class="cue">$1</span>') + '</p>';
-    }).join('');
-    return html + '<p class="end">End of script</p>';
+    return paras.map(function (p) { return '<p>' + wrapWords(p) + '</p>'; }).join('') + '<p class="end">End of script</p>';
   }
   function fmt(sec) {
     sec = Math.max(0, Math.round(sec));
@@ -929,6 +942,7 @@ select {
   /* ---------- Prompter ---------- */
   var P = $('prompter'), flip = $('flip'), scroller = $('scroller'), copy = $('copy'), textEl = $('text');
   var pos = 0, textH = 0, words = 0, playing = false, last = 0, elapsed = 0, counting = null, open = false;
+  var wordPos = 0, lines = [];
 
   /* Which screen edge the selfie camera is on when a phone is held sideways (null otherwise).
      Rotated counterclockwise (angle 90) puts the top of the phone, and its camera, on the left. */
@@ -945,10 +959,45 @@ select {
   try { if (screen.orientation) screen.orientation.addEventListener('change', function () { if (open) setTimeout(layout, 150); }); } catch (e) {}
   window.addEventListener('orientationchange', function () { if (open) setTimeout(layout, 150); });
 
-  function pxPerSec() { return words ? textH * s.wpm / (words * 60) : 0; }
+  /* Speed is measured in spoken words, not pixels. Every word on screen is measured once per layout
+     and grouped into lines; while playing, the word count advances at exactly the chosen words per
+     minute and the scroll position follows it line by line. Blank lines, paragraph gaps and stage
+     directions take no time, and a short line passes faster than a long one, so the pace you hear
+     matches the number on the speed control. */
+  function measureLines() {
+    lines = [];
+    var spans = textEl.querySelectorAll('.w');
+    var base = textEl.offsetTop;
+    for (var i = 0; i < spans.length; i++) {
+      var top = spans[i].offsetTop - base;
+      var L = lines[lines.length - 1];
+      if (L && Math.abs(top - L.top) < 4) L.count++;
+      else lines.push({ top: top, start: i, count: 1 });
+    }
+    var lineH = s.size * s.lh;
+    for (var k = 0; k < lines.length; k++) lines[k].next = k + 1 < lines.length ? lines[k + 1].top : lines[k].top + lineH;
+    words = spans.length;
+  }
+  function yForWord(w) {
+    if (!lines.length) return 0;
+    if (w <= 0) return lines[0].top;
+    for (var k = 0; k < lines.length; k++) {
+      var L = lines[k];
+      if (w < L.start + L.count) return L.top + (L.next - L.top) * ((w - L.start) / L.count);
+    }
+    return lines[lines.length - 1].next;
+  }
+  function wordForY(y) {
+    if (!lines.length) return 0;
+    if (y <= lines[0].top) return 0;
+    for (var k = 0; k < lines.length; k++) {
+      var L = lines[k];
+      if (y < L.next) return L.start + L.count * Math.max(0, (y - L.top) / (L.next - L.top));
+    }
+    return words;
+  }
 
   function layout() {
-    var ratio = textH ? pos / textH : 0;
     var H = P.clientHeight;
     copy.style.fontSize = s.size + 'px';
     copy.style.lineHeight = s.lh;
@@ -982,7 +1031,8 @@ select {
     $('h-wpm').textContent = s.wpm;
     $('h-size').textContent = s.size;
     textH = textEl.offsetHeight;
-    pos = ratio * textH;
+    measureLines();
+    pos = yForWord(wordPos);
     apply();
     placePip();
   }
@@ -990,9 +1040,8 @@ select {
   function apply() {
     pos = Math.max(0, Math.min(textH, pos));
     scroller.style.transform = 'translate3d(0,' + (-pos) + 'px,0)';
-    $('progress-bar').style.width = (textH ? pos / textH * 100 : 0) + '%';
-    var v = pxPerSec();
-    $('h-left').textContent = $('h-left-bar').textContent = fmt(v ? (textH - pos) / v : 0);
+    $('progress-bar').style.width = (words ? Math.min(1, wordPos / words) * 100 : 0) + '%';
+    $('h-left').textContent = $('h-left-bar').textContent = fmt(Math.max(0, words - wordPos) * 60 / s.wpm);
     $('h-elapsed').textContent = fmt(elapsed);
   }
 
@@ -1001,13 +1050,14 @@ select {
     if (!last) last = t;
     var dt = Math.min(0.1, (t - last) / 1000);
     last = t;
-    pos += pxPerSec() * dt;
+    wordPos += s.wpm / 60 * dt;
     elapsed += dt;
-    if (pos >= textH) {
-      pos = textH; apply(); pause(); toast('End of script');
+    if (wordPos >= words) {
+      wordPos = words; pos = yForWord(words); apply(); pause(); toast('End of script');
       if (cam.rec && s.autoRec) { clearTimeout(cam.endT); cam.endT = setTimeout(stopRec, 2000); }
       return;
     }
+    pos = yForWord(wordPos);
     apply();
     requestAnimationFrame(tick);
   }
@@ -1015,12 +1065,20 @@ select {
   function setState() {
     P.classList.toggle('live', playing);
     $('h-state').textContent = counting ? 'STANDBY' : playing ? 'ROLLING' : 'PAUSED';
-    $('h-play').classList.toggle('is-playing', playing);
-    $('h-play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    $('h-play').classList.toggle('is-playing', playing || !!counting);
+    $('h-play').setAttribute('aria-label', playing || counting ? 'Pause' : 'Play');
   }
+  /* The only way the words start moving: Play (the button, Space, or a clicker's play key).
+     Starting from the top runs the countdown first and, if it's on, starts recording. */
   function play() {
     if (playing || counting) return;
-    if (pos >= textH) { pos = 0; elapsed = 0; }
+    if (wordPos >= words) { wordPos = 0; elapsed = 0; pos = yForWord(0); apply(); }
+    var fromTop = wordPos < 0.01;
+    if (fromTop && s.countdown) { countdown(); return; }
+    roll(fromTop);
+  }
+  function roll(fromTop) {
+    if (fromTop) autoRecord();
     playing = true; last = 0;
     setState(); wake();
     requestAnimationFrame(tick);
@@ -1031,14 +1089,12 @@ select {
   function cancelCount() {
     if (counting) { clearTimeout(counting); counting = null; $('count').hidden = true; }
   }
-  function countdownThenPlay() {
-    pause();
+  function countdown() {
     var n = s.countdown;
-    if (!n) { autoRecord(); play(); return; }
     var box = $('count'), num = $('count-n');
     box.hidden = false;
     function step() {
-      if (n === 0) { box.hidden = true; counting = null; autoRecord(); play(); return; }
+      if (n === 0) { box.hidden = true; counting = null; roll(true); return; }
       num.textContent = n;
       num.style.animation = 'none'; void num.offsetWidth; num.style.animation = '';
       n--;
@@ -1048,7 +1104,13 @@ select {
     step();
   }
 
-  function restart() { if (cam.rec) stopRec(); pos = 0; elapsed = 0; apply(); countdownThenPlay(); }
+  /* Restart goes back to the top and waits. Press Play to roll again (that's a new take). */
+  function restart() {
+    if (cam.rec) stopRec();
+    pause();
+    wordPos = 0; elapsed = 0; pos = yForWord(0); apply();
+    toast('Back to the top. Press Play when ready');
+  }
 
   var toastT;
   function toast(msg, ms) {
@@ -1073,20 +1135,19 @@ select {
     s.size = Math.max(28, Math.min(160, s.size + d));
     saveSettings(); layout(); toast(s.size + ' px text');
   }
-  function nudge(px) { pos += px; apply(); }
+  function nudge(px) { pos = Math.max(0, Math.min(textH, pos + px)); wordPos = wordForY(pos); apply(); }
 
   function openPrompter() {
     textEl.innerHTML = renderScript(scriptEl.value || '[No script yet] Go back to the editor and paste your script.');
-    words = countWords(scriptEl.value);
     P.hidden = false; open = true;
     P.classList.toggle('min', !!s.hudMin);
-    pos = 0; elapsed = 0; textH = 0;
+    pos = 0; elapsed = 0; textH = 0; wordPos = 0;
+    pause();
     layout();
     wake();
     if (!cam.stream && s.pipMode !== 'off' && canCapture && !camBlocked()) startCamera();
     camUI();
-    countdownThenPlay();
-    toast('Scroll, drag, or press ↑ ↓ to move the text', 3500);
+    toast('Press Play when you’re ready', 3000);
   }
   function closePrompter() {
     if (cam.rec) stopRec();
@@ -1186,7 +1247,7 @@ select {
     drag.y = e.clientY;
   });
   flip.addEventListener('pointerup', function () {
-    if (drag && !drag.moved) toggle();
+    if (drag && !drag.moved) wake();
     drag = null;
   });
   flip.addEventListener('pointercancel', function () { drag = null; });
