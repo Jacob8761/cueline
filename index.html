@@ -473,6 +473,28 @@ input[type="range"] { width: 100%; accent-color: var(--amber); margin: 0; }
   .left-time { display: none; }
   .sep { margin: 0 1px; }
 }
+.panel .speed-row { display: none; }
+
+/* Phones and tablets: big, easy-to-hit Play and Record; speed moves into More on narrow screens
+   so the bar still fits on one line. */
+@media (pointer: coarse) {
+  .bar { gap: 6px; padding: 6px 8px; }
+  .ib { width: 46px; height: 46px; }
+  .ib svg { width: 22px; height: 22px; }
+  .ib.primary { width: 66px; height: 66px; }
+  .ib.primary svg { width: 30px; height: 30px; }
+  #h-rec { width: 58px; height: 58px; background: rgba(255, 90, 79, .14); }
+  #h-rec .rec-dot { width: 24px; height: 24px; }
+  #h-rec.is-rec .rec-dot { width: 20px; height: 20px; }
+  .ib.save-btn { width: 52px; height: 52px; }
+  .speed .ib { width: 42px; height: 46px; font-size: 22px; }
+  .chip { padding: 10px 14px; font-size: 14px; }
+  #h-restore { width: 44px; height: 44px; opacity: .4; }
+}
+@media (pointer: coarse) and (max-width: 440px) {
+  .bar .speed, .bar .sep { display: none; }
+  .panel .speed-row { display: flex; }
+}
 
 /* ---------- Camera ---------- */
 .cam-view {
@@ -798,6 +820,9 @@ select {
   <div class="hud" id="hud">
     <div class="panel" id="panel" role="dialog" aria-label="More controls">
       <div class="row"><span>Status</span><span class="status"><b id="h-state">PAUSED</b> · <b id="h-elapsed">0:00</b> in · <b id="h-left">0:00</b> left</span></div>
+      <div class="row speed-row"><span>Speed</span>
+        <div class="speed"><button class="ib" type="button" id="h-slower2" aria-label="Slower">−</button><span class="val"><b id="h-wpm2">140</b><small>wpm</small></span><button class="ib" type="button" id="h-faster2" aria-label="Faster">+</button></div>
+      </div>
       <div class="row"><span>Text size</span>
         <div class="speed"><button class="ib" type="button" id="h-smaller" aria-label="Smaller text">−</button><span class="val"><b id="h-size">64</b><small>px</small></span><button class="ib" type="button" id="h-bigger" aria-label="Bigger text">+</button></div>
       </div>
@@ -1028,7 +1053,7 @@ select {
     flip.style.transform = 'scale(' + (s.mirrorX ? -1 : 1) + ',' + (s.mirrorY ? -1 : 1) + ')';
     P.classList.toggle('no-guide', !s.showGuide);
     $('h-mirror').classList.toggle('on', s.mirrorX);
-    $('h-wpm').textContent = s.wpm;
+    $('h-wpm').textContent = $('h-wpm2').textContent = s.wpm;
     $('h-size').textContent = s.size;
     textH = textEl.offsetHeight;
     measureLines();
@@ -1191,6 +1216,8 @@ select {
     P.classList.toggle('min', min);
     try { (min ? $('h-restore') : $('h-min')).focus({ preventScroll: true }); } catch (e) {}
   }
+  $('h-slower2').addEventListener('click', function () { changeSpeed(-10); });
+  $('h-faster2').addEventListener('click', function () { changeSpeed(10); });
   $('h-more').addEventListener('click', function () { setPanel(!$('hud').classList.contains('panel-open')); });
   $('h-min').addEventListener('click', function () { setMin(true); });
   $('h-restore').addEventListener('click', function () { setMin(false); });
